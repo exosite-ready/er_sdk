@@ -1,0 +1,284 @@
+#---------------------------------------------------------------
+# Usage
+#
+# Add sources:
+#[ SRC; <CONFIG_PARAM>=<VALUE> ]
+#
+# Add compiler flags:
+# [ DEF; <CONFIG_PARAM>=<VALUE> ]
+#
+# Add include path:
+# [ INC; <CONFIG_PARAM>=<VALUE> ]
+#
+#---------------------------------------------------------------
+
+< MODULE_NAME = sdk>
+
+#================================================================
+# SDK Core
+#================================================================
+[ SRC; CONFIG_HAS_SDK_CORE ]
+    /src/sdk_init.c
+    /src/client_config.c
+    /src/protocol_client_sm.c
+    /src/exosite_api.c
+    /src/system_utils.c
+    /src/net_dev_factory.c
+    /src/protocol_clients/net_dev_test.c
+
+[ INC; CONFIG_HAS_SDK_CORE ]
+    /include
+    /src/include
+    /src/include/config
+
+#================================================================
+# Libs
+#================================================================
+[ SRC; CONFIG_HAS_LIBS ]
+    /src/lib/cbuffer.c
+    /src/lib/ts_cbuffer.c
+    /src/lib/tcp_buffer.c
+    /src/lib/packet_buffer.c
+    /src/lib/debug.c
+    /src/lib/heap_manager.c
+    /src/lib/heap_tracker.c
+    /src/lib/hs_mem.c
+    /src/lib/mem_check.c
+    /src/lib/pmatch.c
+    /src/rtc.c
+    /src/lib/string_class.c
+    /src/lib/pclb.c
+    /src/lib/concurrent_queue.c
+    /src/lib/tdictionary.c
+    /third_party/lib/queue.c
+    /third_party/lib/dlmalloc.c
+
+#================================================================
+# Operating System
+#================================================================
+
+# ExOS
+#---------
+[ SRC; CONFIG_OS=cfg_exos ]
+    /porting/system/exos/system.c
+    /porting/system/exos/thread.c
+    /porting/system/exos/mutex.c
+    
+[ INC; CONFIG_OS=cfg_exos ]
+    /porting/system/exos
+
+
+# FreeRTOS
+#------------
+[ SRC; CONFIG_OS=cfg_freertos ]
+    /porting/system/FreeRTOS/system.c
+    /porting/system/FreeRTOS/thread.c
+    /porting/system/FreeRTOS/mutex.c
+    
+[ INC; CONFIG_OS=cfg_freertos ]
+    /porting/system/FreeRTOS
+
+# Linux
+#---------
+[ SRC; CONFIG_OS=cfg_linux ]
+    /porting/system/posix/system.c
+    /porting/system/posix/thread.c
+    /porting/system/posix/mutex.c
+    
+[ INC; CONFIG_OS=cfg_linux ]
+    /porting/system/posix
+
+
+# OS X
+#-------
+[ SRC; CONFIG_OS=cfg_osx ]
+    /porting/system/posix/system.c
+    /porting/system/posix/thread.c
+    /porting/system/posix/mutex.c
+    
+[ INC; CONFIG_OS=cfg_osx ]
+    /porting/system/posix
+
+
+# MQX
+#------
+[ SRC; CONFIG_OS=cfg_mqx ]
+    /porting/system/mqx/system.c
+    /porting/system/mqx/thread.c
+    /porting/system/mqx/mutex.c
+    
+[ INC; CONFIG_OS=cfg_mqx ]
+    /porting/system/mqx
+
+#================================================================
+# Network Stack
+#================================================================
+
+# uIP
+#------
+[ SRC; CONFIG_NETWORK_STACK=cfg_uip ]
+    /porting/net/uip/net_if_uip_tcp.c
+    /porting/net/uip/net_if_uip_udp.c
+    /porting/net/uip/uip_port.c
+
+
+# Atheros Network Stack
+#-------------------------
+[ SRC; CONFIG_NETWORK_STACK=cfg_atheros ]
+    /porting/net/atheros/atheros_port.c
+    /porting/net/atheros/net_if_atheros_udp.c
+    /porting/net/atheros/net_if_atheros_tcp.c
+
+
+# LwIP
+#---------
+[ SRC; CONFIG_NETWORK_STACK=cfg_lwip ]
+    /porting/net/lwip/lwip_port.c
+    /porting/net/lwip/net_if_lwip_tcp.c
+    /porting/net/lwip/net_if_lwip_udp.c
+
+[ INC; CONFIG_NETWORK_STACK=cfg_lwip ]
+    /third_party/lwip/src/include
+    /third_party/lwip/src/include/ipv4
+
+
+# POSIX Network Stack
+#----------------------
+[ SRC; CONFIG_NETWORK_STACK=cfg_posix ]
+    /porting/net/posix/posix_port.c
+    /porting/net/posix/net_if_posix_tcp.c
+    /porting/net/posix/net_if_posix_udp.c
+
+# Microchip WCM network stack
+#----------------------
+[ SRC; CONFIG_NETWORK_STACK=cfg_wcm ]
+    /porting/net/microchip_wcm/net_if_wcm_tcp.c
+    /porting/net/microchip_wcm/net_if_wcm_udp.c
+    /porting/net/microchip_wcm/wcm_network_stack_port.c
+
+#================================================================
+# Protocols
+#================================================================
+
+# HTTP Support
+#---------------
+[ SRC; CONFIG_HAS_HTTP ]
+    /src/protocol_clients/http_client.c
+    /src/protocol_clients/http_parser.c
+    /src/server_api/exosite_http_api.c
+
+#Co-AP Support (picocoap)
+#--------------------------
+[ SRC; CONFIG_HAS_PICOCOAP ]
+    /third_party/libexositecoap/picocoap/src/coap.c
+    /src/protocol_clients/picocoap_client.c
+    /src/server_api/exosite_picocoap_api.c
+[ INC; CONFIG_HAS_PICOCOAP ]
+    /third_party/libexositecoap/picocoap/src
+
+#Co-AP Support (libcoap)
+#--------------------------
+[ SRC; CONFIG_HAS_LIBCOAP ]
+    /src/protocol_clients/libcoap_client.c
+    /src/server_api/exosite_libcoap_api.c
+    /third_party/libcoap/block.c
+    /third_party/libcoap/coap_list.c
+    /third_party/libcoap/debug.c
+    /third_party/libcoap/encode.c
+    /third_party/libcoap/hashkey.c
+    /third_party/libcoap/option.c
+    /third_party/libcoap/pdu.c
+    /third_party/libcoap/resource.c
+    /third_party/libcoap/str.c
+    /third_party/libcoap/uri.c
+    /third_party/libcoap/net.c
+
+#================================================================
+# Security
+#================================================================
+
+# SSL
+#------
+[ SRC; CONFIG_SECURITY=cfg_cyassl ]
+    /third_party/cyassl/src/internal.c
+    /third_party/cyassl/src/io.c
+    /third_party/cyassl/src/keys.c
+    /third_party/cyassl/src/ssl.c
+    /third_party/cyassl/src/tls.c
+    /third_party/cyassl/ctaocrypt/src/hmac.c
+    /third_party/cyassl/ctaocrypt/src/random.c
+    /third_party/cyassl/ctaocrypt/src/sha256.c
+    /third_party/cyassl/ctaocrypt/src/logging.c
+    /third_party/cyassl/ctaocrypt/src/wc_port.c
+    /third_party/cyassl/ctaocrypt/src/error.c
+    /third_party/cyassl/ctaocrypt/src/memory.c
+    /third_party/cyassl/ctaocrypt/src/rsa.c
+    /third_party/cyassl/ctaocrypt/src/asn.c
+    /third_party/cyassl/ctaocrypt/src/coding.c
+    /third_party/cyassl/ctaocrypt/src/aes.c
+    /third_party/cyassl/ctaocrypt/src/sha.c
+    /third_party/cyassl/ctaocrypt/src/arc4.c
+    /third_party/cyassl/ctaocrypt/src/md5.c
+    /third_party/cyassl/ctaocrypt/src/tfm.c
+    /third_party/cyassl/ctaocrypt/src/dh.c
+    /third_party/cyassl/ctaocrypt/src/integer.c
+    /third_party/cyassl/ctaocrypt/src/pwdbased.c
+    /third_party/cyassl/ctaocrypt/src/ecc.c
+    /third_party/lib/cyassl_adapt.c
+    /src/protocol_clients/cyassl_client.c
+[ INC; CONFIG_SECURITY=cfg_cyassl ]
+    /third_party/cyassl
+
+[ SRC; CONFIG_SECURITY=cfg_mbedtls ]
+    /third_party/mbedtls/library/aes.c
+    /third_party/mbedtls/library/asn1parse.c
+    /third_party/mbedtls/library/base64.c
+    /third_party/mbedtls/library/bignum.c
+    /third_party/mbedtls/library/certs.c
+    /third_party/mbedtls/library/cipher.c
+    /third_party/mbedtls/library/cipher_wrap.c
+    /third_party/mbedtls/library/ctr_drbg.c
+    /third_party/mbedtls/library/debug.c
+    /third_party/mbedtls/library/dhm.c
+    /third_party/mbedtls/library/ecdh.c
+    /third_party/mbedtls/library/ecp.c
+    /third_party/mbedtls/library/ecp_curves.c
+    /third_party/mbedtls/library/entropy.c
+    /third_party/mbedtls/library/entropy_poll.c
+    /third_party/mbedtls/library/error.c
+    /third_party/mbedtls/library/md.c
+    /third_party/mbedtls/library/md_wrap.c
+    /third_party/mbedtls/library/md5.c
+    /third_party/mbedtls/library/oid.c
+    /third_party/mbedtls/library/pem.c
+    /third_party/mbedtls/library/pk.c
+    /third_party/mbedtls/library/pkcs11.c
+    /third_party/mbedtls/library/pkparse.c
+    /third_party/mbedtls/library/pk_wrap.c
+    /third_party/mbedtls/library/platform.c
+    /third_party/mbedtls/library/rsa.c
+    /third_party/mbedtls/library/sha1.c
+    /third_party/mbedtls/library/sha256.c
+    /third_party/mbedtls/library/ssl_ciphersuites.c
+    /third_party/mbedtls/library/ssl_cli.c
+    /third_party/mbedtls/library/ssl_srv.c
+    /third_party/mbedtls/library/ssl_tls.c
+    /third_party/mbedtls/library/x509_crt.c
+    /third_party/mbedtls/library/x509.c
+    /src/protocol_clients/mbedtls_client.c
+
+[ INC; CONFIG_SECURITY=cfg_mbedtls ]
+    /third_party/mbedtls/include
+
+[ DEF; CONFIG_SECURITY=cfg_mbedtls ]
+    "MBEDTLS_CONFIG_FILE='<src/include/config/config_mbedtls.h>'"
+
+#================================================================
+# Configurator Server
+#================================================================
+
+[ SRC; CONFIG_HAS_CONFIGURATOR_SERVER ]
+    /src/configurator_server.c
+    /src/resources/configurator_server_res.c
+    /third_party/http-parser-master/http_parser.c
+

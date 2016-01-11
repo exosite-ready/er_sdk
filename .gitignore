@@ -1,0 +1,15 @@
+*.o
+gw/version.lua
+*.P
+inc/romfiles.h
+luac.cross
+*.map
+*.log
+*.bin
+*.exe
+*.elf
+*.hex
+*.oap
+*.so
+*.dis
+version.h

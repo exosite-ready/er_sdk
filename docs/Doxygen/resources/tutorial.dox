@@ -1,0 +1,44 @@
+
+/** 
+ *  @page exosite_send_http Tutorial
+ *  This page explains how to use the Exosite Ready SDK through a
+ *  a very simple example application <br>
+ *  The following source is the source code of an application using the SDK.
+ *  You will find detailed explanation below:
+ *
+ *  @par Source
+ *  @include exosite_send_http.c
+ *  @section http_send Send data over HTTP
+ *
+ *  Create the callback function that will be called when
+ *  the write operation is finished. It will get the status
+ *  and the alias of the data source.
+ *  @skip on_write
+ *  @until }
+ *
+ *  In the main function we have to declare a couple of 
+ *  variables first.
+ *  @skip exosite_class
+ *  @until error
+ *
+ *  The next step is the SDK initialization.
+ *  @skip exosite_sdk_init
+ *  @until return
+ *
+ *  Having initialized the SDK we can create an instance
+ *  @skip exosite_new
+ *  @until return
+ *
+ *  Wait until the activation is finished
+ *  @skip do
+ *  @until while
+ *
+ *  In an infinite loop, we write value into the "Counter" 
+ *  data source in every two seconds. For waiting, we use
+ *  exosite_delay_and_poll function.
+ *  @skip while
+ *  @until exosite_delay_and_poll
+ *  @skip }
+ *  @until }
+ */
+ 

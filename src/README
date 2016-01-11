@@ -1,0 +1,9 @@
+ Exosite Ready SDK core
+=============================
+
+DO NOT TOUCH FILES IN THIS FOLDER!!!
+
+This folder contains the internals of the Exosite Ready SDK.
+Regular users should only use 
+  * the public API (in include/exosite_api.h) or
+  * the porting API in the porting folder

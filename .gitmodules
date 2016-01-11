@@ -1,0 +1,12 @@
+[submodule "third_party/cyassl"]
+	path = third_party/cyassl
+	url = https://github.com/wolfSSL/wolfssl.git
+[submodule "third_party/libexositecoap"]
+	path = third_party/libexositecoap
+	url = https://github.com/exosite-labs/libexositecoap
+[submodule "third_party/libcoap"]
+	path = third_party/libcoap
+	url = https://github.com/exosite-ready/libcoap.git
+[submodule "third_party/mbedtls"]
+	path = third_party/mbedtls
+	url = https://github.com/ARMmbed/mbedtls.git
