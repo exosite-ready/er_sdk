@@ -1023,8 +1023,9 @@ static void activate_sm(void *obj)
             }
         }
 
-        if (old_state != exo->activate_state)
+        if (old_state != exo->activate_state) {
             info_log(DEBUG_EXOAPI, ("Device activated %s\n", exo->cik));
+        }
 
         args = cqueue_peek_head(exo->request_queue);
         if (args) {
