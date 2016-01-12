@@ -65,7 +65,9 @@
  * - DEBUG_INFO      - Error, Warning and Info messages
  * - DEBUG_DEBUG     - All of the messages
  **/
-#define COMPILE_TIME_DEBUG_LEVEL DEBUG_INFO
+#ifndef COMPILE_TIME_DEBUG_LEVEL
+    #define COMPILE_TIME_DEBUG_LEVEL DEBUG_INFO
+#endif
 
 /**@}*/
 
