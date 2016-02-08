@@ -1,15 +1,15 @@
-Exosite Ready SDK
+ExositeReady SDK
 ----------------------------------------------------------------------------------------
 
  Overview
 ============
 
-The Exosite Ready SDK is a collection of software modules that allows 
+The ExositeReady SDK is a collection of software modules that allows 
 to easily compile modular Exosite Client software for various HW platforms 
 supported by Exosite. It has built-in support for various network protocols
 and to provide flexible access to the Exosite services.
 
-The Exosite Ready SDK is ideal for the embedded environments.
+The ExositeReady SDK is ideal for the embedded environments.
 
 Features
 ---------
