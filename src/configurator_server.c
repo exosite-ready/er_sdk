@@ -99,7 +99,7 @@ static void clb_set_ssid(size_t num_of_cap, struct capture *cap)
 
     if (num_of_cap != 0) {
         ASSERT(cap->len+1 <= sizeof(cfg_server.wifi.ssid));
-        snprintf(cfg_server.wifi.ssid, cap->len+1, cap->init);
+        strncpy(cfg_server.wifi.ssid, cap->init, cap->len+1);
         debug_log(DEBUG_CONFIGURATOR, ("SSID: %s\n", cfg_server.wifi.ssid));
         cfg_server.cfg_changed = TRUE;
     }
@@ -133,7 +133,7 @@ static void clb_set_passpharas(size_t num_of_cap, struct capture *cap)
 
     if (num_of_cap != 0) {
         ASSERT(cap->len+1 <= sizeof(cfg_server.wifi.passpharase));
-        snprintf(cfg_server.wifi.passpharase, cap->len+1, cap->init);
+        strncpy(cfg_server.wifi.passpharase, cap->init, cap->len+1);
         debug_log(DEBUG_CONFIGURATOR, ("Passphrase: %s\n", cfg_server.wifi.passpharase));
         cfg_server.cfg_changed = TRUE;
     }

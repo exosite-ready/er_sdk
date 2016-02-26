@@ -79,13 +79,10 @@ int32_t system_thread_create(system_thread_t *thread, const system_thread_attr_t
                         &sched_param);
         }
 
-        /* Set stack address */
-        if (attr->stack_loc && !status)
-            status = pthread_attr_setstackaddr(&pthread_attr, attr->stack_loc);
-
-        /* Set stack size */
-        if (attr->stack_size && !status)
-            status = pthread_attr_setstacksize(&pthread_attr, attr->stack_size);
+        /* Set stack address & size */
+        if (attr->stack_loc && attr->stack_size && !status)
+            status = pthread_attr_setstack(&pthread_attr, attr->stack_loc,
+                    attr->stack_size);
 
         if (!status)
             status = pthread_create((pthread_t *) thread, &pthread_attr,

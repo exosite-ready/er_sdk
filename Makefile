@@ -7,17 +7,18 @@ CC=gcc
 OBJCOPY=objcopy
 
 #BUILD flags for GCC on x86
-ifeq ($(UNAME), Linux)
+ifeq ($(shell uname), Linux)
 LDGROUP_START= -Wl,--start-group 
 LDGROUP_END= -Wl,--end-group
 LDFLAGS += -Wl,--gc-sections -m32 -lrt -lpthread -lm
+CFLAGS += -D_GNU_SOURCE
 else
 LDGROUP_START= 
 LDGROUP_END=
 LDFLAGS += -m32
 endif
 CFLAGS += -g -m32 -ffunction-sections -fdata-sections -fno-common -fno-strict-aliasing -fomit-frame-pointer
-CFLAGS += -std=c99 -pedantic -Werror -Wall -Wmissing-prototypes
+CFLAGS += -std=c99 -Werror -Wall -Wmissing-prototypes
 CFLAGS_EXTRA += -Wextra -Wwrite-strings -Wcast-qual -Wcast-align -Wshadow -Wstrict-prototypes -Wold-style-definition -Wunused-result
 CFLAGS += $(ER_SDK_FLAG) $(ER_SDK_INC)
 
