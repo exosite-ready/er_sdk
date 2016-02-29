@@ -247,7 +247,7 @@ static int32_t set_response(struct client_socket *client, enum page_type page)
     /** 2. Compose the response (HTTP framing + Payload) */
     /*---------------------------------------------------*/
     sprintf(response_header,
-            "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n",
+            "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nContent-Length: %zu\r\n\r\n",
             string_get_size(response_payload));
 
     status = string_new(&client->response, response_header);
