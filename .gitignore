@@ -13,3 +13,6 @@ luac.cross
 *.so
 *.dis
 version.h
+.sources/
+cik.store
+modules.mk
