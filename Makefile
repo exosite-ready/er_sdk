@@ -11,7 +11,7 @@ ifeq ($(shell uname), Linux)
 LDGROUP_START= -Wl,--start-group 
 LDGROUP_END= -Wl,--end-group
 LDFLAGS += -Wl,--gc-sections -m32 -lrt -lpthread -lm
-CFLAGS += -D_GNU_SOURCE
+CFLAGS += -D_POSIX_C_SOURCE=200809L
 else
 LDGROUP_START= 
 LDGROUP_END=
