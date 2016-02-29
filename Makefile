@@ -19,7 +19,7 @@ LDFLAGS += -m32
 endif
 CFLAGS += -g -m32 -ffunction-sections -fdata-sections -fno-common -fno-strict-aliasing -fomit-frame-pointer
 CFLAGS += -std=c99 -Werror -Wall -Wmissing-prototypes
-CFLAGS_EXTRA += -Wextra -Wwrite-strings -Wcast-qual -Wcast-align -Wshadow -Wstrict-prototypes -Wold-style-definition -Wunused-result
+CFLAGS_EXTRA += -Wextra -Wpedantic -Wwrite-strings -Wcast-qual -Wcast-align -Wshadow -Wstrict-prototypes -Wold-style-definition -Wunused-result
 CFLAGS += $(ER_SDK_FLAG) $(ER_SDK_INC)
 
 #Set make parameters
