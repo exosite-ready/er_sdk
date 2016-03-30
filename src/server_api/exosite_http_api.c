@@ -596,7 +596,7 @@ static int32_t http_parse_payload(struct exo_request_args *request_args,
     case EXO_PP_DOWNLOAD_CONTENT:
     case EXO_UP_IP:
     default:
-        pattern = "(%w-)=(%w*)";
+        pattern = "(%w-)=([%-%w]*)";
         found = str_find(payload, size, pattern, strlen(pattern), 0, 0, &num_captures, captures, 10);
         if (found) {
             memmove(payload, captures[1].init, captures[1].len);
