@@ -120,6 +120,7 @@
  *  - cfg_atheros  - Atheros network stack
  *  - cfg_lwip     - lwIP network stack
  *  - cfg_posix    - POSIX compatible network stack
+ *  - cfg_harmony  - Microchip Harmony network stack
  *  - cfg_custom   - Check out @ref sdk_porting_guide
  */
 #ifndef CONFIG_NETWORK_STACK

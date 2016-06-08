@@ -156,6 +156,13 @@
     /porting/net/microchip_wcm/net_if_wcm_udp.c
     /porting/net/microchip_wcm/wcm_network_stack_port.c
 
+# Microchip Harmony framework's network stack
+#----------------------
+[ SRC; CONFIG_NETWORK_STACK=cfg_harmony ]
+    /porting/net/microchip_harmony/net_if_harmony_tcp.c
+    /porting/net/microchip_harmony/net_if_harmony_udp.c
+    /porting/net/microchip_harmony/harmony_port.c
+
 #================================================================
 # Protocols
 #================================================================

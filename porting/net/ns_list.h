@@ -20,6 +20,7 @@
 #define cfg_lwip        (0x02)
 #define cfg_posix       (0x03)
 #define cfg_wcm         (0x04)
+#define cfg_harmony     (0x05)
 #define cfg_custom      (0xff)
 
 #endif /* ER_SDK_PORTING_NETWORKING_NS_LIST_H_ */

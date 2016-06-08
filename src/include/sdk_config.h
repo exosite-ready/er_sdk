@@ -70,6 +70,8 @@
     #define BUILD_ATHEROS_STACK
 #elif (CONFIG_NETWORK_STACK==cfg_lwip)
     #define BUILD_LWIP
+#elif (CONFIG_NETWORK_STACK==cfg_harmony)
+    #define BUILD_HARMONY_NET
 #elif (CONFIG_NETWORK_STACK==cfg_posix)
     #define BUILD_POSIX_NET
 #endif
