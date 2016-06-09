@@ -33,8 +33,9 @@ struct thread_instance_args {
 static void thread_instance(void *args)
 {
     struct thread_instance_args *thread_args = (struct thread_instance_args *)args;
-
     thread_args->threadCode(thread_args->threadParams);
+    
+    sf_free(args);
     vTaskDelete(NULL);
 }
 
@@ -69,7 +70,9 @@ int32_t system_thread_create(system_thread_t *thread, const system_thread_attr_t
     UBaseType_t priority;
 #endif
     uint16_t usStackDepth = FREERTOS_DEFAULT_STACK_SIZE;
-    struct thread_instance_args args;
+    struct thread_instance_args *args = (struct thread_instance_args *)sf_malloc(sizeof(struct thread_instance_args));
+    if (!args)
+        return ERR_NO_MEMORY;
 
     priority = NormalThreadPriority;
 
@@ -104,8 +107,8 @@ int32_t system_thread_create(system_thread_t *thread, const system_thread_attr_t
         }
     }
 
-    args.threadCode = start_routine;
-    args.threadParams = param;
+    args->threadCode = start_routine;
+    args->threadParams = param;
 
     if (attr->stack_size != E_THREAD_DEFAULT_STACK_SIZE) {
         if (attr->stack_size / sizeof(portSTACK_TYPE) > 0xffff) {
@@ -130,7 +133,7 @@ int32_t system_thread_create(system_thread_t *thread, const system_thread_attr_t
     status = xTaskCreate(thread_instance,
                          attr->name,
                          usStackDepth,
-                         &args,
+                         args,
                          priority,
                          &new_thread);
 #endif
