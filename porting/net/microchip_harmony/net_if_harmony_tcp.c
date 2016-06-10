@@ -15,6 +15,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/errno.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -93,7 +96,7 @@ static int32_t net_if_socket_internal(struct net_socket **new_socket,
         return ERR_FAILURE;
     }
 
-    nsocket = malloc(sizeof(*nsocket));
+    nsocket = sf_malloc(sizeof(*nsocket));
     if (nsocket) {
         nsocket->sockfd = sockfd;
         nsocket->ops = &eth_ops;
@@ -109,6 +112,8 @@ static int32_t net_if_socket_internal(struct net_socket **new_socket,
     }
 
     *new_socket = nsocket;
+
+    check_memory();
 
     return ERR_SUCCESS;
 }
@@ -130,62 +135,176 @@ static int32_t net_if_socket_udp(struct net_dev_operations *self, struct net_soc
     return 0;
 }
 
+
+uint32_t inet_addr(const char *cp) {
+
+    struct in_addr val;
+
+    if (inet_aton(cp, &val))
+        return (val.s_addr);
+    return (0);
+}
+
+/*
+ * Check whether "cp" is a valid ASCII representation
+ * of an Internet address and convert to a binary address.
+ * Returns 1 if the address is valid, 0 if not.
+ * This replaces inet_addr, the return value from which
+ * cannot distinguish between failure and a local broadcast address.
+ */
+int
+inet_aton(const char *cp, struct in_addr *addr) {
+    u_long parts[4];
+    uint32_t val;
+    char *c;
+    char *endptr;
+    int gotend, n;
+
+    c = (char *)cp;
+    n = 0;
+    /*
+     * Run through the string, grabbing numbers until
+     * the end of the string, or some error
+     */
+    gotend = 0;
+    while (!gotend) {
+        errno = 0;
+        val = strtoul(c, &endptr, 0);
+
+        if (errno == ERANGE)    /* Fail completely if it overflowed. */
+            return (0);
+
+        /*
+         * If the whole string is invalid, endptr will equal
+         * c.. this way we can make sure someone hasn't
+         * gone '.12' or something which would get past
+         * the next check.
+         */
+        if (endptr == c)
+            return (0);
+        parts[n] = val;
+        c = endptr;
+
+        /* Check the next character past the previous number's end */
+        switch (*c) {
+        case '.' :
+            /* Make sure we only do 3 dots .. */
+            if (n == 3) /* Whoops. Quit. */
+                return (0);
+            n++;
+            c++;
+            break;
+
+        case '\0':
+            gotend = 1;
+            break;
+
+        default:
+            if (isspace((unsigned char)*c)) {
+                gotend = 1;
+                break;
+            } else
+                return (0); /* Invalid character, so fail */
+        }
+
+    }
+
+    /*
+     * Concoct the address according to
+     * the number of parts specified.
+     */
+
+    switch (n) {
+    case 0:             /* a -- 32 bits */
+        /*
+         * Nothing is necessary here.  Overflow checking was
+         * already done in strtoul().
+         */
+        break;
+    case 1:             /* a.b -- 8.24 bits */
+        if (val > 0xffffff || parts[0] > 0xff)
+            return (0);
+        val |= parts[0] << 24;
+        break;
+
+    case 2:             /* a.b.c -- 8.8.16 bits */
+        if (val > 0xffff || parts[0] > 0xff || parts[1] > 0xff)
+            return (0);
+        val |= (parts[0] << 24) | (parts[1] << 16);
+        break;
+
+    case 3:             /* a.b.c.d -- 8.8.8.8 bits */
+        if (val > 0xff || parts[0] > 0xff || parts[1] > 0xff ||
+            parts[2] > 0xff)
+            return (0);
+        val |= (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8);
+        break;
+    }
+
+    if (addr != NULL)
+        addr->s_addr = htonl(val);
+    return (1);
+}
+
 static int32_t net_if_connect(struct net_socket *socket, 
                               const char *ip,
                               unsigned short port)
 {
-    debug_log(DEBUG_NET, ("net_if_connect(%d, %s, %d)\n", socket->sockfd, ip, port));
-    /*
-    struct sockaddr_in addr;
-    int error;
-
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = inet_addr(ip);
-
+    static struct sockaddr_in addr;
+    static BOOL in_progress = FALSE;
+    uint32_t status = ERR_WOULD_BLOCK;;
+    int socker_status;
+    
     if (socket->connected)
         return ERR_SUCCESS;
+    
+    if (!in_progress) {
+        debug_log(DEBUG_NET, ("Connect to %s:%d\n", ip, port));
+        addr.sin_port = (uint16_t)port;
+        addr.sin_addr.S_un.S_addr = inet_addr(ip);
+        in_progress = TRUE;
+    }
+    
+    do {
+        socker_status = connect( socket->sockfd, (struct sockaddr*)&addr, sizeof(struct sockaddr));
 
-    error = connect(socket->sockfd, (const struct sockaddr *) &addr,
-            sizeof(addr));
+        if (socker_status == SOCKET_ERROR) {
+            switch (errno) {
+            case EINPROGRESS:
+                status = ERR_WOULD_BLOCK;
+                break;
+            default:
+                error_log(DEBUG_NET, ("Connect failed\n"), status);
+                status = ERR_FAILURE;
+                break;
+            }
 
-    if (error)
-        switch (errno) {
-        case EINPROGRESS:
-        case EALREADY:
-            return ERR_WOULD_BLOCK;
-        case EISCONN:
+        } else {
+            debug_log(DEBUG_NET, ("Connected to %s:%d\n", ip, port));
+            status = ERR_SUCCESS;
             socket->connected = TRUE;
-            return ERR_SUCCESS;
-        default:
-            error_log(DEBUG_NET, ("Connect failed\n"), error);
-            return ERR_FAILURE;
         }
+    } while(status == ERR_WOULD_BLOCK && !socket->non_blocking);
 
-    socket->connected = TRUE;
-    return error;
-    */
-    return 0;
+    if (status != ERR_WOULD_BLOCK)
+        in_progress = FALSE;
+
+    return status;
 }
 
 static int net_if_receive(struct net_socket *net_if, char *buf, size_t size, size_t *nbytes_recvd)
 {
-    /*
     int recvd;
     int sd = net_if->sockfd;
 
     recvd = (int) recv(sd, buf, size, net_if->rflags);
 
-    if (recvd < 0) {
-        int err;
-
-        err = errno;
-        if (err == EWOULDBLOCK || err == EAGAIN)
+    if (recvd == SOCKET_ERROR) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN)
             if (net_if->non_blocking)
                 return ERR_WOULD_BLOCK;
 
-        return recvd;
+        return ERR_FAILURE;
     }
 
     if (recvd == 0) {
@@ -194,32 +313,26 @@ static int net_if_receive(struct net_socket *net_if, char *buf, size_t size, siz
     }
 
     *nbytes_recvd = (size_t)recvd;
-    */
+
     return ERR_SUCCESS;
 }
 
 static int net_if_send(struct net_socket *net_if, const char *buf, size_t size, size_t *nbytes_sent)
 {
-    /*
     int sd = net_if->sockfd;
     int sent;
-    size_t len = size;
 
-    sent = (int) send(sd, &buf[size - len], len, net_if->wflags);
+    sent = send(sd, buf, (int)size, net_if->wflags);
 
-    if (sent < 0) {
-        int err;
-
-        err = errno;
-        if (err == EWOULDBLOCK || err == EAGAIN)
+    if (sent == SOCKET_ERROR) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN)
             if (net_if->non_blocking)
                 return ERR_WOULD_BLOCK;
 
-        return sent;
+        return ERR_FAILURE;
     }
 
     *nbytes_sent = (size_t)sent;
-    */
     return ERR_SUCCESS;
 }
 
@@ -240,19 +353,19 @@ static int net_if_lookup(struct net_dev_operations *self, char *hostname, char *
     static uint16_t    port = 80;
 
     struct hostent *   hostInfo;
-    static uint8_t     lookup_in_progress = 0;
+    static BOOL        in_progress = FALSE;
     
     int32_t status = ERR_WOULD_BLOCK;
 
     (void)self;
 
-    if (!lookup_in_progress) {
+    if (!in_progress) {
 
         hostname_cpy = sf_malloc(strlen(hostname) +1);
         strcpy(hostname_cpy, hostname);
 
         debug_log(DEBUG_NET, ("DNS lookup: %s\n", hostname));
-        lookup_in_progress = 1;
+        in_progress = TRUE;
         if (_APP_ParseUrl(hostname, &host, &path, &port)) {
             error_log(DEBUG_NET, ("Could not parse URL '%s'\r\n", hostname), ERR_INVALID_FORMAT);
             status = ERR_INVALID_FORMAT;
@@ -270,14 +383,7 @@ static int net_if_lookup(struct net_dev_operations *self, char *hostname, char *
         hostInfo = gethostbyname(host);
 
         if (hostInfo != NULL) {
-            
-//          memcpy(&addr.sin_addr.S_un.S_addr, *(hostInfo->h_addr_list), sizeof(IPV4_ADDR));
-/*
-            printf("%d:%d:%d:%d", addr.sin_addr.S_un.S_un_b.s_b1,
-                                  addr.sin_addr.S_un.S_un_b.s_b2,
-                                  addr.sin_addr.S_un.S_un_b.s_b3,
-                                  addr.sin_addr.S_un.S_un_b.s_b4);
-*/           
+
             unpackip(hostInfo, ipaddr_str, len);
             debug_log(DEBUG_NET, ("DNS resolution: %s\n", ipaddr_str));
             status = ERR_SUCCESS;
@@ -296,7 +402,7 @@ static int net_if_lookup(struct net_dev_operations *self, char *hostname, char *
         host = NULL;
         path = NULL;
         port = 80;
-        lookup_in_progress = 0;
+        in_progress = FALSE;
         check_memory();
     }
 
@@ -305,12 +411,13 @@ static int net_if_lookup(struct net_dev_operations *self, char *hostname, char *
 
 static int net_if_close(struct net_socket *net_if)
 {
-    debug_log(DEBUG_NET, ("net_if_lookup(%d)\n", net_if->sockfd));
+    debug_log(DEBUG_NET, ("Close socket (%d)\n", net_if->sockfd));
             
-    /*
-    close(net_if->sockfd);
-    free(net_if);
-    */
+    closesocket(net_if->sockfd);
+    sf_free(net_if);
+
+    check_memory();
+
     return ERR_SUCCESS;
 }
 
