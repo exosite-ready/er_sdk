@@ -16,20 +16,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/*
-#include <errno.h>
-#include <unistd.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
-#include <sys/ioctl.h>
-#include <sys/time.h>
-#include <sys/socket.h>
-#include <pthread.h>
-#include <fcntl.h>
-*/
-
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -37,66 +23,74 @@
 #include <lib/error.h>
 #include <lib/debug.h>
 #include <porting/net_port.h>
+#include <lib/sf_malloc.h>
+#include "tcpip/tcpip.h"
 
 static struct net_dev_operations eth_ops;
+extern int h_errno;
 
-/*
-static struct sockaddr_in getipa(const char *hostname, int port)
+static int32_t _APP_ParseUrl(char *uri, char **host, char **path, uint16_t * port)
 {
-    struct sockaddr_in ipa;
-    ipa.sin_family = AF_INET;
-    ipa.sin_port = htons(port);
+    char * pos;
+    pos = strstr(uri, "//"); //Check to see if its a proper URL
+    *port = 80;
 
-    struct hostent *localhost = gethostbyname(hostname);
 
-    if (!localhost) {
-        error_log(DEBUG_NET, ("Resolving localhost\n"), ERR_FAILURE);
-        return ipa;
+    if ( pos )
+        *host = pos + 2; // This is where the host should start
+    else
+        *host = uri;
+
+    pos = strchr( * host, ':');
+
+    if ( !pos ) {
+        pos = strchr(*host, '/');
+        if (!pos) {
+            *path = NULL;
+        } else {
+            *pos = '\0';
+            *path = pos + 1;
+        }
     }
+    else {
+        *pos = '\0';
+        char * portc = pos + 1;
 
-    char *addr = localhost->h_addr_list[0];
-
-    memcpy(&ipa.sin_addr.s_addr, addr, sizeof(ipa.sin_addr.s_addr));
-
-    return ipa;
+        pos = strchr(portc, '/');
+        if (!pos) {
+            *path = NULL;
+        }
+        else {
+            *pos = '\0';
+            *path = pos + 1;
+        }
+        *port = atoi(portc);
+    }
+    return ERR_SUCCESS;
 }
-*/
 
 static int32_t net_if_socket_internal(struct net_socket **new_socket,
                                       enum transport_protocol_type type,
                                       const int *posix_socket)
 {
-    /*
     int sockfd = 0;
     struct net_socket *nsocket = NULL;
-    int flags;
 
-    if (posix_socket == NULL) {
-        switch (type) {
-        case TRANSPORT_PROTO_UDP:
-            sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-            break;
-        case TRANSPORT_PROTO_TCP:
-            sockfd = socket(AF_INET, SOCK_STREAM, 0);
-            break;
-        default:
-            ASSERT(0);
-            break;
-        }
+    switch (type) {
+    case TRANSPORT_PROTO_UDP:
+        sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+        break;
+    case TRANSPORT_PROTO_TCP:
+        sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        break;
+    default:
+        ASSERT(0);
+        break;
+    }
 
-        if (sockfd < 0) {
-            error_log(DEBUG_NET, ("Failed to create socket %d\n", sockfd), errno);
-            return ERR_FAILURE;
-        }
-
-        flags = fcntl(sockfd, F_GETFL, 0);
-        if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0) {
-            error_log(DEBUG_NET, ("Ioctl FAILED\n"), errno);
-            return ERR_FAILURE;
-        }
-    } else {
-        ASSERT(*posix_socket >= 0);
-        sockfd = *posix_socket;
+    if (sockfd == SOCKET_ERROR) {
+        error_log(DEBUG_NET, ("Failed to create socket %d\n", sockfd), ERR_FAILURE);
+        return ERR_FAILURE;
     }
 
     nsocket = malloc(sizeof(*nsocket));
@@ -115,66 +109,32 @@ static int32_t net_if_socket_internal(struct net_socket **new_socket,
     }
 
     *new_socket = nsocket;
-    */
+
     return ERR_SUCCESS;
 }
 
 static int32_t net_if_socket_tcp(struct net_dev_operations *self, struct net_socket **socket)
 {
-    /*
     (void)self;
+    debug_log(DEBUG_NET, ("Create TCP socket\n"));
     return net_if_socket_internal(socket, TRANSPORT_PROTO_TCP, NULL);
-    */
-    return 0;
-}
-
-static int32_t net_if_server_socket_tcp(struct net_dev_operations *self,
-                                        struct net_socket **server_socket,
-                                        const char *ip,
-                                        unsigned short port)
-{
-/*
-    int status = ERR_SUCCESS;
-    struct sockaddr_in isa = getipa("localhost", port);
-
-    (void)self;
-    (void)ip;
-
-
-    status = net_if_socket_internal(server_socket, TRANSPORT_PROTO_TCP, NULL);
-    if (status != ERR_SUCCESS)
-        return status;
-
-
-    status = bind((*server_socket)->sockfd, (struct sockaddr *)&isa, sizeof(isa));
-    if (status != 0) {
-        error_log(DEBUG_NET, ("binding socket to IP address\n"), status);
-        close((*server_socket)->sockfd);
-        return ERR_FAILURE;
-    }
-
-    status = listen((*server_socket)->sockfd, 1);
-    if (status != 0) {
-        error_log(DEBUG_NET, ("setting socket to listen\n"), status);
-        close((*server_socket)->sockfd);
-        return ERR_FAILURE;
-    }
-*/
-    return ERR_SUCCESS;
 }
 
 static int32_t net_if_socket_udp(struct net_dev_operations *self, struct net_socket **socket)
 {
     /*
     (void)self;
+    debug_log(DEBUG_NET, ("Create UDP socket\n"));
     return net_if_socket_internal(socket, TRANSPORT_PROTO_UDP, NULL);
     */
     return 0;
 }
 
-static int32_t net_if_connect(struct net_socket *socket, const char *ip,
-        unsigned short port)
+static int32_t net_if_connect(struct net_socket *socket, 
+                              const char *ip,
+                              unsigned short port)
 {
+    debug_log(DEBUG_NET, ("net_if_connect(%d, %s, %d)\n", socket->sockfd, ip, port));
     /*
     struct sockaddr_in addr;
     int error;
@@ -207,30 +167,6 @@ static int32_t net_if_connect(struct net_socket *socket, const char *ip,
     return error;
     */
     return 0;
-}
-
-static int32_t net_if_accept(struct net_socket *server_socket, struct net_socket **socket)
-{
-    /*
-    int status = ERR_SUCCESS;
-    int posix_socket;
-
-    posix_socket = accept(server_socket->sockfd, NULL, NULL);
-    if (posix_socket == -1) {
-
-        if (errno == EWOULDBLOCK || errno == ERR_WOULD_BLOCK)
-            return ERR_WOULD_BLOCK;
-
-        error_log(DEBUG_NET, ("accepting a connection\n"), ERR_FAILURE);
-        return ERR_FAILURE;
-    }
-
-    status = net_if_socket_internal(socket, TRANSPORT_PROTO_TCP, &posix_socket);
-    if (status != ERR_SUCCESS)
-        return status;
-
-    */
-    return ERR_SUCCESS;
 }
 
 static int net_if_receive(struct net_socket *net_if, char *buf, size_t size, size_t *nbytes_recvd)
@@ -287,36 +223,90 @@ static int net_if_send(struct net_socket *net_if, const char *buf, size_t size, 
     return ERR_SUCCESS;
 }
 
+static int unpackip(struct hostent * hostInfo, char *addr, int size)
+{
+    char* ip = *(hostInfo->h_addr_list);
+    snprintf(addr, size, "%d.%d.%d.%d",
+            (uint8_t)ip[0], (uint8_t)ip[1],
+            (uint8_t)ip[2], (uint8_t)ip[3]);
+    return 0;
+}
+
 static int net_if_lookup(struct net_dev_operations *self, char *hostname, char *ipaddr_str, size_t len)
 {
-    /*
-    struct addrinfo hints, *res;
-    struct in_addr addr;
-    int err;
+    static char *      hostname_cpy = NULL;
+    static char *      host = NULL;
+    static char *      path = NULL;
+    static uint16_t    port = 80;
+
+    struct hostent *   hostInfo;
+    static uint8_t     lookup_in_progress = 0;
+    
+    int32_t status = ERR_WOULD_BLOCK;
 
     (void)self;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_family = AF_INET;
 
-    err = getaddrinfo(hostname, NULL, &hints, &res);
-    if (err != 0) {
-        error_log(DEBUG_NET, ("%s\n", gai_strerror(err)), err);
-        error_log(DEBUG_NET, ("DNS error while resolving %s\n", hostname), err);
-        return ERR_NET_DNS_ERROR;
+    if (!lookup_in_progress) {
+
+        hostname_cpy = sf_malloc(strlen(hostname) +1);
+        strcpy(hostname_cpy, hostname);
+
+        debug_log(DEBUG_NET, ("DNS lookup: %s\n", hostname));
+        lookup_in_progress = 1;
+        if (_APP_ParseUrl(hostname, &host, &path, &port)) {
+            error_log(DEBUG_NET, ("Could not parse URL '%s'\r\n", hostname), ERR_INVALID_FORMAT);
+            status = ERR_INVALID_FORMAT;
+        }
+        debug_log(DEBUG_NET, ("host: %s, path: %s, port: %d\n",
+                host ? host : "Unknown",
+                path ? path : "Unknown",
+                port));
+
+        check_memory();
     }
 
-    addr.s_addr = ((struct sockaddr_in *)(void *)(res->ai_addr))->sin_addr.s_addr;
-    inet_ntop(AF_INET, &addr, ipaddr_str, len);
-    debug_log(DEBUG_NET, ("ip address : %s\n", ipaddr_str));
+    while (status == ERR_WOULD_BLOCK) {
 
-    freeaddrinfo(res);
-    */
-    return ERR_SUCCESS;
+        hostInfo = gethostbyname(host);
+
+        if (hostInfo != NULL) {
+            
+//          memcpy(&addr.sin_addr.S_un.S_addr, *(hostInfo->h_addr_list), sizeof(IPV4_ADDR));
+/*
+            printf("%d:%d:%d:%d", addr.sin_addr.S_un.S_un_b.s_b1,
+                                  addr.sin_addr.S_un.S_un_b.s_b2,
+                                  addr.sin_addr.S_un.S_un_b.s_b3,
+                                  addr.sin_addr.S_un.S_un_b.s_b4);
+*/           
+            unpackip(hostInfo, ipaddr_str, len);
+            debug_log(DEBUG_NET, ("DNS resolution: %s\n", ipaddr_str));
+            status = ERR_SUCCESS;
+
+        } else if (h_errno == TRY_AGAIN) {
+            status = ERR_WOULD_BLOCK;;
+        } else {
+            error_log(DEBUG_NET, ("DNS error while resolving %s\n", hostname), h_errno);
+            status = ERR_NET_DNS_ERROR;
+        }
+    }
+
+    if (status != ERR_WOULD_BLOCK) {
+        sf_free(hostname_cpy);
+        hostname_cpy = NULL;
+        host = NULL;
+        path = NULL;
+        port = 80;
+        lookup_in_progress = 0;
+        check_memory();
+    }
+
+    return status;
 }
 
 static int net_if_close(struct net_socket *net_if)
 {
+    debug_log(DEBUG_NET, ("net_if_lookup(%d)\n", net_if->sockfd));
+            
     /*
     close(net_if->sockfd);
     free(net_if);
@@ -326,9 +316,9 @@ static int net_if_close(struct net_socket *net_if)
 
 static struct net_dev_operations tcp_ops = {
         net_if_socket_tcp,          /* socket */
-        net_if_server_socket_tcp,   /* server_socket */
+        NULL,                       /* server_socket */
         net_if_connect,             /* connect */
-        net_if_accept,              /* accept */
+        NULL,                       /* accept */
         net_if_close,               /* close */
         net_if_receive,             /* recv */
         net_if_send,                /* send */
