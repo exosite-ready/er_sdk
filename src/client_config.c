@@ -73,7 +73,11 @@ struct transmission_config_class transmission_config = {
     MAX_REQUEST_QUEUE_SIZE,
     PROTOCOL_CLIENT_SM_QUEUE_SIZE,
     NO_REQUEST_LIMIT,                   /* Parallel requests */
+#if (CONFIG_SECURITY != cfg_no_security)
     SECURITY_TLS_DTLS,                  /* Security mode */
+#else
+    SECURITY_OFF,
+#endif
     TRUE                                /* Forced activation */
 };
 
