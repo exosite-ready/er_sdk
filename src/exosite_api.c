@@ -1244,7 +1244,13 @@ int32_t exosite_new(struct exosite_class **exo,
         goto cleanup7;
 
     e->protocol_type = app_type;
+
+#ifdef TIME_SYNC_ENABLED
     e->next_state = AS_SEND_GET_TIMESTAMP;
+#else
+    e->next_state = AS_INIT;
+#endif
+
     e->asynch_state_event = FALSE;
     e->activate_request_attempts = 0;
     e->activate_requests = 0;

@@ -99,6 +99,7 @@
 
 #if ((CONFIG_SECURITY == cfg_cyassl) || (CONFIG_SECURITY == cfg_mbedtls))
     #define BUILD_SSL
+    #define TIME_SYNC_ENABLED
     /*
      * CYASSL specific defines are located in ./config/config.h
      * If HAVE_CONFIG_H is defined the SYASSL sources includes
