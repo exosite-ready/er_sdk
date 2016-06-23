@@ -212,6 +212,18 @@
 #endif
 
 /**
+ * @brief This sets the path of an external config file that
+ * will be included by the include/config/config.h file if
+ * the CONFIG_SECURITY is set to cfg_external. It can be very
+ * helpful if the external security module uses its own
+ * config.h file.
+ *
+ * By default it is 0 that means "There is no external config file"
+ **/
+//  //  #define CONFIG_EXTERNAL_SECURITY_CONFIG   <PATH/OF/THE/EXTERNAL/CONFIG>
+
+
+/**
  * @brief This sets the configurator server
  *
  * Configurator server is a web server that provide a configuration

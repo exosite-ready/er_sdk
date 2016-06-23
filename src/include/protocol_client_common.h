@@ -23,7 +23,8 @@ enum application_protocol_type {
 
 enum security_mode {
     SECURITY_OFF,
-    SECURITY_TLS_DTLS
+    SECURITY_TLS_DTLS,
+    SECURITY_EXTERNAL
 };
 
 enum state_machine_type {

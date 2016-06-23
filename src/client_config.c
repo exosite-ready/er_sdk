@@ -73,11 +73,16 @@ struct transmission_config_class transmission_config = {
     MAX_REQUEST_QUEUE_SIZE,
     PROTOCOL_CLIENT_SM_QUEUE_SIZE,
     NO_REQUEST_LIMIT,                   /* Parallel requests */
-#if (CONFIG_SECURITY != cfg_no_security)
-    SECURITY_TLS_DTLS,                  /* Security mode */
-#else
+
+    /* Security mode */
+#if (CONFIG_SECURITY == cfg_no_security)
     SECURITY_OFF,
+#elif (CONFIG_SECURITY == cfg_external)
+    SECURITY_EXTERNAL,
+#else
+    SECURITY_TLS_DTLS,
 #endif
+
     TRUE                                /* Forced activation */
 };
 
@@ -94,14 +99,16 @@ struct periodic_config_class periodic_config = {
  * Server names and ports for the different Application protocols/security can be configured here
  * Make sure that you fill the server_data array as well
  **/
-static struct server_data_class server_data_http  = {APP_PROTO_HTTP, SECURITY_OFF, "m2.exosite.com", 80};
-static struct server_data_class server_data_https = {APP_PROTO_HTTP, SECURITY_TLS_DTLS, "m2.exosite.com", 443};
-static struct server_data_class server_data_coap  = {APP_PROTO_COAP, SECURITY_OFF, "coap.exosite.com", 5683};
-static struct server_data_class server_data_coaps = {APP_PROTO_COAP, SECURITY_TLS_DTLS, "coap-dev.exosite.com", 5684};
+static struct server_data_class server_data_http      = {APP_PROTO_HTTP, SECURITY_OFF, "m2.exosite.com", 80};
+static struct server_data_class server_data_https     = {APP_PROTO_HTTP, SECURITY_TLS_DTLS, "m2.exosite.com", 443};
+static struct server_data_class server_data_https_ext = {APP_PROTO_HTTP, SECURITY_EXTERNAL, "m2.exosite.com", 443};
+static struct server_data_class server_data_coap      = {APP_PROTO_COAP, SECURITY_OFF, "coap.exosite.com", 5683};
+static struct server_data_class server_data_coaps     = {APP_PROTO_COAP, SECURITY_TLS_DTLS, "coap-dev.exosite.com", 5684};
 
 static struct server_data_class *server_data[] = {
         &server_data_http,
         &server_data_https,
+        &server_data_https_ext,
         &server_data_coap,
         &server_data_coaps,
         NULL

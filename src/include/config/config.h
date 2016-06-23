@@ -30,6 +30,12 @@
 
 #endif
 
+#if (CONFIG_SECURITY==cfg_external) && defined (CONFIG_EXTERNAL_CONFIG)
+#define INCLUDE_PATH_OF_EXTERNAL_CONFIG    <CONFIG_EXTERNAL_CONFIG>
+#include INCLUDE_PATH_OF_EXTERNAL_CONFIG
+#endif
+
+
 #if (CONFIG_SECURITY==cfg_mbedtls)
 #include "config_mbedtls.h"
 #endif
