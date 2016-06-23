@@ -253,7 +253,7 @@ static int32_t net_if_connect(struct net_socket *socket,
     static struct sockaddr_in addr;
     static BOOL in_progress = FALSE;
     uint32_t status = ERR_WOULD_BLOCK;;
-    int socker_status;
+    int socket_status;
     
     if (socket->connected)
         return ERR_SUCCESS;
@@ -266,15 +266,15 @@ static int32_t net_if_connect(struct net_socket *socket,
     }
     
     do {
-        socker_status = connect( socket->sockfd, (struct sockaddr*)&addr, sizeof(struct sockaddr));
+        socket_status = connect( socket->sockfd, (struct sockaddr*)&addr, sizeof(struct sockaddr));
 
-        if (socker_status == SOCKET_ERROR) {
+        if (socket_status == SOCKET_ERROR) {
             switch (errno) {
             case EINPROGRESS:
                 status = ERR_WOULD_BLOCK;
                 break;
             default:
-                error_log(DEBUG_NET, ("Connect failed\n"), status);
+                error_log(DEBUG_NET, ("Connect failed\n"), errno);
                 status = ERR_FAILURE;
                 break;
             }
