@@ -13,6 +13,9 @@
  * @brief Net_dev_operations implementation for the Posix network stack for TCP
  **/
 #include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -29,8 +32,30 @@
 #include <lib/sf_malloc.h>
 #include "tcpip/tcpip.h"
 
+
+//#define SECURITY_SSL_ENABLED
+
+
+#ifdef SECURITY_SSL_ENABLED
+#include <cyassl/ssl.h>
+#include <tcpip/src/hash_fnv.h>
+#include "system_config.h"
+#include "system_definitions.h"
+#endif
+
+
 static struct net_dev_operations eth_ops;
 extern int h_errno;
+
+
+
+enum ssl_connection_states {
+    TCPIP_NOT_CONNECTED,
+    TCPIP_WAIT_FOR_CONNECTION,
+    TCPIP_WAIT_FOR_SSL_CONNECT,
+    TCPIP_CLOSE_CONNECTION,
+    TCPIP_CONNECTED
+};
 
 static int32_t _APP_ParseUrl(char *uri, char **host, char **path, uint16_t * port)
 {
@@ -74,6 +99,7 @@ static int32_t _APP_ParseUrl(char *uri, char **host, char **path, uint16_t * por
 
 static int32_t net_if_socket_internal(struct net_socket **new_socket,
                                       enum transport_protocol_type type,
+                                      BOOL ssl,
                                       const int *posix_socket)
 {
     int sockfd = 0;
@@ -84,7 +110,12 @@ static int32_t net_if_socket_internal(struct net_socket **new_socket,
         sockfd = socket(AF_INET, SOCK_DGRAM, 0);
         break;
     case TRANSPORT_PROTO_TCP:
-        sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        if (ssl)
+            /* The real socker creation will be performed during the
+             * socket opening....*/
+            sockfd = 0;
+        else
+            sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         break;
     default:
         ASSERT(0);
@@ -104,7 +135,7 @@ static int32_t net_if_socket_internal(struct net_socket **new_socket,
         nsocket->wflags = 0;
         nsocket->dtls = 0;
         nsocket->non_blocking = 1;
-        nsocket->connected = 0;
+        nsocket->connected = TCPIP_NOT_CONNECTED;
         nsocket->already_started = 0;
     } else {
         error_log(DEBUG_NET, ("Failed to allocate memory for socket\n"), ERR_NO_MEMORY);
@@ -116,13 +147,6 @@ static int32_t net_if_socket_internal(struct net_socket **new_socket,
     check_memory();
 
     return ERR_SUCCESS;
-}
-
-static int32_t net_if_socket_tcp(struct net_dev_operations *self, struct net_socket **socket)
-{
-    (void)self;
-    debug_log(DEBUG_NET, ("Create TCP socket\n"));
-    return net_if_socket_internal(socket, TRANSPORT_PROTO_TCP, NULL);
 }
 
 static int32_t net_if_socket_udp(struct net_dev_operations *self, struct net_socket **socket)
@@ -246,96 +270,6 @@ inet_aton(const char *cp, struct in_addr *addr) {
     return (1);
 }
 
-static int32_t net_if_connect(struct net_socket *socket, 
-                              const char *ip,
-                              unsigned short port)
-{
-    static struct sockaddr_in addr;
-    static BOOL in_progress = FALSE;
-    uint32_t status = ERR_WOULD_BLOCK;;
-    int socket_status;
-    
-    if (socket->connected)
-        return ERR_SUCCESS;
-    
-    if (!in_progress) {
-        debug_log(DEBUG_NET, ("Connect to %s:%d\n", ip, port));
-        addr.sin_port = (uint16_t)port;
-        addr.sin_addr.S_un.S_addr = inet_addr(ip);
-        in_progress = TRUE;
-    }
-    
-    do {
-        socket_status = connect( socket->sockfd, (struct sockaddr*)&addr, sizeof(struct sockaddr));
-
-        if (socket_status == SOCKET_ERROR) {
-            switch (errno) {
-            case EINPROGRESS:
-                status = ERR_WOULD_BLOCK;
-                break;
-            default:
-                error_log(DEBUG_NET, ("Connect failed\n"), errno);
-                status = ERR_FAILURE;
-                break;
-            }
-
-        } else {
-            debug_log(DEBUG_NET, ("Connected to %s:%d\n", ip, port));
-            status = ERR_SUCCESS;
-            socket->connected = TRUE;
-        }
-    } while(status == ERR_WOULD_BLOCK && !socket->non_blocking);
-
-    if (status != ERR_WOULD_BLOCK)
-        in_progress = FALSE;
-
-    return status;
-}
-
-static int net_if_receive(struct net_socket *net_if, char *buf, size_t size, size_t *nbytes_recvd)
-{
-    int recvd;
-    int sd = net_if->sockfd;
-
-    recvd = (int) recv(sd, buf, size, net_if->rflags);
-
-    if (recvd == SOCKET_ERROR) {
-        if (errno == EWOULDBLOCK || errno == EAGAIN)
-            if (net_if->non_blocking)
-                return ERR_WOULD_BLOCK;
-
-        return ERR_FAILURE;
-    }
-
-    if (recvd == 0) {
-        error_log(DEBUG_NET, ("Remote host closed the connection\n"), ERR_FAILURE);
-        return ERR_FAILURE;
-    }
-
-    *nbytes_recvd = (size_t)recvd;
-
-    return ERR_SUCCESS;
-}
-
-static int net_if_send(struct net_socket *net_if, const char *buf, size_t size, size_t *nbytes_sent)
-{
-    int sd = net_if->sockfd;
-    int sent;
-
-    sent = send(sd, buf, (int)size, net_if->wflags);
-
-    if (sent == SOCKET_ERROR) {
-        if (errno == EWOULDBLOCK || errno == EAGAIN)
-            if (net_if->non_blocking)
-                return ERR_WOULD_BLOCK;
-
-        return ERR_FAILURE;
-    }
-
-    *nbytes_sent = (size_t)sent;
-    return ERR_SUCCESS;
-}
-
 static int unpackip(struct hostent * hostInfo, char *addr, int size)
 {
     char* ip = *(hostInfo->h_addr_list);
@@ -409,18 +343,278 @@ static int net_if_lookup(struct net_dev_operations *self, char *hostname, char *
     return status;
 }
 
-static int net_if_close(struct net_socket *net_if)
+#ifdef SECURITY_SSL_ENABLED
+
+static int32_t net_if_socket_ssl_tcp(struct net_dev_operations *self, struct net_socket **socket)
 {
-    debug_log(DEBUG_NET, ("Close socket (%d)\n", net_if->sockfd));
-            
-    closesocket(net_if->sockfd);
-    sf_free(net_if);
+    (void)self;
+    debug_log(DEBUG_NET, ("Create TCP socket over SSL\n"));
+    return net_if_socket_internal(socket, TRANSPORT_PROTO_TCP, TRUE, NULL);
+}
+
+static int32_t net_if_ssl_connect(struct net_socket *socket,
+                                  const char *ip,
+                                  unsigned short port)
+{
+    uint32_t status = ERR_WOULD_BLOCK;
+    IP_MULTI_ADDRESS addr;
+    TCP_PORT tcp_ssl_port;
+
+    if (socket->connected == TCPIP_CONNECTED)
+        return ERR_SUCCESS;
+
+    do {
+
+        switch (socket->connected) {
+        case TCPIP_NOT_CONNECTED:
+
+            debug_log(DEBUG_NET, ("Connect to %s:%d\n", ip, port));
+            tcp_ssl_port = (TCP_PORT)port;
+            addr.v4Add.Val = inet_addr(ip);
+            debug_log(DEBUG_NET, ("Starting TCP/IPv4 Connection to : %d.%d.%d.%d port  '%d'\r\n",
+                                   addr.v4Add.v[0], addr.v4Add.v[1], addr.v4Add.v[2], addr.v4Add.v[3],
+                                   tcp_ssl_port));
+
+            socket->sockfd = (int32_t)NET_PRES_SocketOpen(
+                                        0,
+                                        NET_PRES_SKT_UNENCRYPTED_STREAM_CLIENT,
+                                        IP_ADDRESS_TYPE_IPV4,
+                                        tcp_ssl_port,
+                                        (NET_PRES_ADDRESS *)&addr,
+                                        NULL);
+            NET_PRES_SocketWasReset(socket->sockfd);
+            if (socket->sockfd == INVALID_SOCKET) {
+                error_log(DEBUG_NET, ("Connect failed\n"), errno);
+                status = ERR_FAILURE;
+                return status;
+            }
+            socket->connected = TCPIP_WAIT_FOR_CONNECTION;
+            break;
+
+        case TCPIP_WAIT_FOR_CONNECTION:
+            if (!NET_PRES_SocketIsConnected(socket->sockfd))
+                status = ERR_WOULD_BLOCK;
+            else {
+                debug_log(DEBUG_NET, ("Connection Opened: Starting SSL Negotiation\r\n"));
+                if (!NET_PRES_SocketEncryptSocket(socket->sockfd)) {
+                    error_log(DEBUG_NET, ("SSL Create Connection Failed - Aborting\r\n"), errno);
+                    socket->connected = TCPIP_CLOSE_CONNECTION;
+                }
+                else {
+                    debug_log(DEBUG_NET, ("Waiting for SSL connect...\r\n"));
+                    socket->connected = TCPIP_WAIT_FOR_SSL_CONNECT;
+                }
+            }
+            break;
+
+        case TCPIP_WAIT_FOR_SSL_CONNECT:
+            if (NET_PRES_SocketIsNegotiatingEncryption(socket->sockfd)) {
+                status = ERR_WOULD_BLOCK;
+                break;
+            }
+            if (!NET_PRES_SocketIsSecure(socket->sockfd)) {
+                error_log(DEBUG_NET, ("SSL Connection Negotiation Failed - Aborting\r\n"), errno);
+                socket->connected = TCPIP_CLOSE_CONNECTION;
+                break;
+            }
+            debug_log(DEBUG_NET, ("SSL Connection Opened: Starting Clear Text Communication\r\n"));
+            socket->connected = TCPIP_CONNECTED;
+            status = ERR_SUCCESS;
+            break;
+
+        case TCPIP_CLOSE_CONNECTION:
+            NET_PRES_SocketClose(socket->sockfd);
+            debug_log(DEBUG_NET, ("Connection Closed\r\n"));
+            socket->connected = TCPIP_NOT_CONNECTED;
+            status = ERR_FAILURE;
+            break;
+        }
+
+    } while(status == ERR_WOULD_BLOCK && !socket->non_blocking);
+
+    return status;
+}
+
+static int net_if_ssl_close(struct net_socket *socket)
+{
+    debug_log(DEBUG_NET, ("Close socket (%d)\n", socket->sockfd));
+
+    NET_PRES_SocketClose(socket->sockfd);
+    socket->connected = TCPIP_NOT_CONNECTED;
+    sf_free(socket);
 
     check_memory();
 
     return ERR_SUCCESS;
 }
 
+static int net_if_ssl_receive(struct net_socket *net_if, char *buf, size_t size, size_t *nbytes_recvd)
+{
+    if (NET_PRES_SocketReadIsReady(net_if->sockfd) == 0) {
+        if (NET_PRES_SocketWasReset(net_if->sockfd)) {
+            error_log(DEBUG_NET, ("Remote host closed the connection\n"), ERR_FAILURE);
+            return ERR_FAILURE;
+        }
+        return ERR_WOULD_BLOCK;
+    }
+    *nbytes_recvd = NET_PRES_SocketRead(net_if->sockfd, (uint8_t*)buf, size);
+    return ERR_SUCCESS;
+}
+
+static int net_if_ssl_send(struct net_socket *net_if, const char *buf, size_t size, size_t *nbytes_sent)
+{
+
+    int sent;
+
+    if (TCPIP_TCP_WasReset(net_if->sockfd)) {
+        debug_log(DEBUG_NET, ("Netif send: socket was reset\n"));
+        return ERR_FAILURE;
+    }
+
+    sent = NET_PRES_SocketWrite(net_if->sockfd, (uint8_t*)buf, size);
+    if (sent < size)
+        debug_log(DEBUG_NET, ("TCP Could not send all\n"));
+
+    *nbytes_sent = (size_t)sent;
+    return ERR_SUCCESS;
+}
+
+#else
+
+static int32_t net_if_socket_tcp(struct net_dev_operations *self, struct net_socket **socket)
+{
+    (void)self;
+    debug_log(DEBUG_NET, ("Create TCP socket\n"));
+    return net_if_socket_internal(socket, TRANSPORT_PROTO_TCP, FALSE, NULL);
+}
+
+static int32_t net_if_connect(struct net_socket *socket, 
+                              const char *ip,
+                              unsigned short port)
+{
+    struct sockaddr_in addr;
+    uint32_t status = ERR_WOULD_BLOCK;;
+    int socket_status;
+    
+    do {
+
+        switch(socket->connected) {
+        case TCPIP_CONNECTED:
+            status = ERR_SUCCESS;
+            break;
+
+        case TCPIP_NOT_CONNECTED:
+            debug_log(DEBUG_NET, ("Connect to %s:%d\n", ip, port));
+            socket->addr = inet_addr(ip);
+            socket->port = port;
+
+            //addr.sin_port = (uint16_t)port;
+            //addr.sin_addr.S_un.S_addr = inet_addr(ip);
+
+            socket->connected = TCPIP_WAIT_FOR_CONNECTION;
+            break;
+
+
+        case TCPIP_WAIT_FOR_CONNECTION:
+            addr.sin_port = (uint16_t)socket->port;
+            addr.sin_addr.S_un.S_addr = socket->addr;
+            socket_status = connect( socket->sockfd, (struct sockaddr*)&addr, sizeof(struct sockaddr));
+            if (socket_status == SOCKET_ERROR) {
+                switch (errno) {
+                case EINPROGRESS:
+                    status = ERR_WOULD_BLOCK;
+                    break;
+                default:
+                    error_log(DEBUG_NET, ("Connect failed\n"), errno);
+                    status = ERR_FAILURE;
+                    break;
+                }
+            }
+            else {
+                debug_log(DEBUG_NET, ("Connected to %s:%d\n", ip, port));
+                status = ERR_SUCCESS;
+                socket->connected = TCPIP_CONNECTED;
+            }
+        }
+    } while(status == ERR_WOULD_BLOCK && !socket->non_blocking);
+
+    return status;
+}
+
+static int net_if_close(struct net_socket *socket)
+{
+    debug_log(DEBUG_NET, ("Close socket (%d)\n", socket->sockfd));
+            
+    closesocket(socket->sockfd);
+    socket->connected = TCPIP_NOT_CONNECTED;
+    sf_free(socket);
+
+    check_memory();
+
+    return ERR_SUCCESS;
+}
+
+static int net_if_receive(struct net_socket *net_if, char *buf, size_t size, size_t *nbytes_recvd)
+{
+    int recvd;
+    int sd = net_if->sockfd;
+
+    recvd = (int) recv(sd, buf, size, net_if->rflags);
+
+    if (recvd == SOCKET_ERROR) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN)
+            if (net_if->non_blocking)
+                return ERR_WOULD_BLOCK;
+
+        return ERR_FAILURE;
+    }
+
+    if (recvd == 0) {
+        error_log(DEBUG_NET, ("Remote host closed the connection\n"), ERR_FAILURE);
+        return ERR_FAILURE;
+    }
+
+    *nbytes_recvd = (size_t)recvd;
+
+    return ERR_SUCCESS;
+}
+
+static int net_if_send(struct net_socket *net_if, const char *buf, size_t size, size_t *nbytes_sent)
+{
+    int sd = net_if->sockfd;
+    int sent;
+
+    sent = send(sd, buf, (int)size, net_if->wflags);
+
+    if (sent == SOCKET_ERROR) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN)
+            if (net_if->non_blocking)
+                return ERR_WOULD_BLOCK;
+
+        return ERR_FAILURE;
+    }
+
+    *nbytes_sent = (size_t)sent;
+    return ERR_SUCCESS;
+}
+
+#endif // SECURITY_SSL_ENABLED
+
+#ifdef SECURITY_SSL_ENABLED
+static struct net_dev_operations tcp_ops = {
+        net_if_socket_ssl_tcp,      /* socket */
+        NULL,                       /* server_socket */
+        net_if_ssl_connect,         /* connect */
+        NULL,                       /* accept */
+        net_if_ssl_close,           /* close */
+        net_if_ssl_receive,         /* recv */
+        net_if_ssl_send,            /* send */
+        net_if_lookup,              /* lookup */
+        NULL,                       /* config */
+        NULL,                       /* set_identity */
+        NULL                        /* deinit */
+};
+#else
 static struct net_dev_operations tcp_ops = {
         net_if_socket_tcp,          /* socket */
         NULL,                       /* server_socket */
@@ -434,16 +628,18 @@ static struct net_dev_operations tcp_ops = {
         NULL,                       /* set_identity */
         NULL                        /* deinit */
 };
+#endif
+
 
 struct net_dev_operations udp_ops = {
         net_if_socket_udp,          /* socket */
         NULL,                       /* server_socket */
-        net_if_connect,             /* connect */
+        NULL,                       /* connect */
         NULL,                       /* accept */
-        net_if_close,               /* close */
-        net_if_receive,             /* recv */
-        net_if_send,                /* send */
-        net_if_lookup,              /* lookup */
+        NULL,                       /* close */
+        NULL,                       /* recv */
+        NULL,                       /* send */
+        NULL,                       /* lookup */
         NULL,                       /* config */
         NULL,                       /* set_identity */
         NULL                        /* deinit */
