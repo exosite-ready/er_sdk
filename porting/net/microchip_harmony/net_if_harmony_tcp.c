@@ -28,13 +28,14 @@
 
 #include <lib/error.h>
 #include <lib/debug.h>
+#include <porting/config_port.h>
 #include <porting/net_port.h>
 #include <lib/sf_malloc.h>
 #include "tcpip/tcpip.h"
 
-
-//#define SECURITY_SSL_ENABLED
-
+#if (CONFIG_SECURITY == cfg_external)
+#define SECURITY_SSL_ENABLED
+#endif
 
 #ifdef SECURITY_SSL_ENABLED
 #include <cyassl/ssl.h>
@@ -107,7 +108,11 @@ static int32_t net_if_socket_internal(struct net_socket **new_socket,
 
     switch (type) {
     case TRANSPORT_PROTO_UDP:
+#ifndef SECURITY_SSL_ENABLED
         sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+#else
+        sockfd = 0; // TODO
+#endif
         break;
     case TRANSPORT_PROTO_TCP:
         if (ssl)
@@ -115,7 +120,11 @@ static int32_t net_if_socket_internal(struct net_socket **new_socket,
              * socket opening....*/
             sockfd = 0;
         else
+#ifndef SECURITY_SSL_ENABLED
             sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+#else
+            sockfd = 0; // TODO
+#endif
         break;
     default:
         ASSERT(0);
@@ -279,7 +288,16 @@ static int unpackip(struct hostent * hostInfo, char *addr, int size)
     return 0;
 }
 
-static int net_if_lookup(struct net_dev_operations *self, char *hostname, char *ipaddr_str, size_t len)
+#ifdef SECURITY_SSL_ENABLED
+
+static int32_t net_if_socket_ssl_tcp(struct net_dev_operations *self, struct net_socket **socket)
+{
+    (void)self;
+    debug_log(DEBUG_NET, ("Create TCP socket over SSL\n"));
+    return net_if_socket_internal(socket, TRANSPORT_PROTO_TCP, TRUE, NULL);
+}
+
+static int net_if_ssl_lookup(struct net_dev_operations *self, char *hostname, char *ipaddr_str, size_t len)
 {
     static char *      hostname_cpy = NULL;
     static char *      host = NULL;
@@ -287,7 +305,11 @@ static int net_if_lookup(struct net_dev_operations *self, char *hostname, char *
     static uint16_t    port = 80;
 
     struct hostent *   hostInfo;
+    
+    IP_MULTI_ADDRESS   address;
+
     static BOOL        in_progress = FALSE;
+    TCPIP_DNS_RESULT   result;
     
     int32_t status = ERR_WOULD_BLOCK;
 
@@ -310,23 +332,34 @@ static int net_if_lookup(struct net_dev_operations *self, char *hostname, char *
                 port));
 
         check_memory();
+
+        result = TCPIP_DNS_Resolve(host, TCPIP_DNS_TYPE_A);
+        if(result < 0) {
+            error_log(DEBUG_NET, ("DNS Query returned %d Aborting\r\n", result), ERR_NET_DNS_ERROR);
+            status = ERR_NET_DNS_ERROR;
+        }
     }
 
     while (status == ERR_WOULD_BLOCK) {
+        result = TCPIP_DNS_IsResolved(host, &address, IP_ADDRESS_TYPE_IPV4 );
 
-        hostInfo = gethostbyname(host);
-
-        if (hostInfo != NULL) {
-
-            unpackip(hostInfo, ipaddr_str, len);
+        switch (result) {
+        case TCPIP_DNS_RES_PENDING:
+            break;
+        case TCPIP_DNS_RES_OK:
+            snprintf(ipaddr_str, len, "%d.%d.%d.%d", 
+                     address.v4Add.v[0],
+                     address.v4Add.v[1],
+                     address.v4Add.v[2],
+                     address.v4Add.v[3]);
             debug_log(DEBUG_NET, ("DNS resolution: %s\n", ipaddr_str));
             status = ERR_SUCCESS;
-
-        } else if (h_errno == TRY_AGAIN) {
-            status = ERR_WOULD_BLOCK;;
-        } else {
-            error_log(DEBUG_NET, ("DNS error while resolving %s\n", hostname), h_errno);
+            break;
+            
+        default:
+            error_log(DEBUG_NET, ("DNS Query returned %d Aborting\r\n", result), ERR_NET_DNS_ERROR);
             status = ERR_NET_DNS_ERROR;
+            break;
         }
     }
 
@@ -341,15 +374,6 @@ static int net_if_lookup(struct net_dev_operations *self, char *hostname, char *
     }
 
     return status;
-}
-
-#ifdef SECURITY_SSL_ENABLED
-
-static int32_t net_if_socket_ssl_tcp(struct net_dev_operations *self, struct net_socket **socket)
-{
-    (void)self;
-    debug_log(DEBUG_NET, ("Create TCP socket over SSL\n"));
-    return net_if_socket_internal(socket, TRANSPORT_PROTO_TCP, TRUE, NULL);
 }
 
 static int32_t net_if_ssl_connect(struct net_socket *socket,
@@ -488,6 +512,70 @@ static int32_t net_if_socket_tcp(struct net_dev_operations *self, struct net_soc
     return net_if_socket_internal(socket, TRANSPORT_PROTO_TCP, FALSE, NULL);
 }
 
+static int net_if_lookup(struct net_dev_operations *self, char *hostname, char *ipaddr_str, size_t len)
+{
+    static char *      hostname_cpy = NULL;
+    static char *      host = NULL;
+    static char *      path = NULL;
+    static uint16_t    port = 80;
+
+    struct hostent *   hostInfo;
+    static BOOL        in_progress = FALSE;
+
+    int32_t status = ERR_WOULD_BLOCK;
+
+    (void)self;
+
+    if (!in_progress) {
+
+        hostname_cpy = sf_malloc(strlen(hostname) +1);
+        strcpy(hostname_cpy, hostname);
+
+        debug_log(DEBUG_NET, ("DNS lookup: %s\n", hostname));
+        in_progress = TRUE;
+        if (_APP_ParseUrl(hostname, &host, &path, &port)) {
+            error_log(DEBUG_NET, ("Could not parse URL '%s'\r\n", hostname), ERR_INVALID_FORMAT);
+            status = ERR_INVALID_FORMAT;
+        }
+        debug_log(DEBUG_NET, ("host: %s, path: %s, port: %d\n",
+                host ? host : "Unknown",
+                path ? path : "Unknown",
+                port));
+
+        check_memory();
+    }
+
+    while (status == ERR_WOULD_BLOCK) {
+
+        hostInfo = gethostbyname(host);
+
+        if (hostInfo != NULL) {
+
+            unpackip(hostInfo, ipaddr_str, len);
+            debug_log(DEBUG_NET, ("DNS resolution: %s\n", ipaddr_str));
+            status = ERR_SUCCESS;
+
+        } else if (h_errno == TRY_AGAIN) {
+            status = ERR_WOULD_BLOCK;;
+        } else {
+            error_log(DEBUG_NET, ("DNS error while resolving %s\n", hostname), h_errno);
+            status = ERR_NET_DNS_ERROR;
+        }
+    }
+
+    if (status != ERR_WOULD_BLOCK) {
+        sf_free(hostname_cpy);
+        hostname_cpy = NULL;
+        host = NULL;
+        path = NULL;
+        port = 80;
+        in_progress = FALSE;
+        check_memory();
+    }
+
+    return status;
+}
+
 static int32_t net_if_connect(struct net_socket *socket, 
                               const char *ip,
                               unsigned short port)
@@ -507,10 +595,6 @@ static int32_t net_if_connect(struct net_socket *socket,
             debug_log(DEBUG_NET, ("Connect to %s:%d\n", ip, port));
             socket->addr = inet_addr(ip);
             socket->port = port;
-
-            //addr.sin_port = (uint16_t)port;
-            //addr.sin_addr.S_un.S_addr = inet_addr(ip);
-
             socket->connected = TCPIP_WAIT_FOR_CONNECTION;
             break;
 
@@ -609,7 +693,7 @@ static struct net_dev_operations tcp_ops = {
         net_if_ssl_close,           /* close */
         net_if_ssl_receive,         /* recv */
         net_if_ssl_send,            /* send */
-        net_if_lookup,              /* lookup */
+        net_if_ssl_lookup,          /* lookup */
         NULL,                       /* config */
         NULL,                       /* set_identity */
         NULL                        /* deinit */

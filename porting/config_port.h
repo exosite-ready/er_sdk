@@ -220,7 +220,7 @@
  *
  * By default it is 0 that means "There is no external config file"
  **/
-//  //  #define CONFIG_EXTERNAL_SECURITY_CONFIG   <PATH/OF/THE/EXTERNAL/CONFIG>
+//  #define CONFIG_EXTERNAL_SECURITY_CONFIG   <PATH/OF/THE/EXTERNAL/CONFIG>
 
 
 /**
