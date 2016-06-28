@@ -44,8 +44,10 @@ void net_dev_factory_init(void)
     udp_client = net_dev_udp_new();
 #endif
 
+#ifdef BUILD_SSL
     debug_log(DEBUG_NET, ("Initalizing SSL\n"));
     ssl_client_init();
+#endif
 }
 
 int32_t net_dev_get(struct net_dev_operations **new_net_dev,
