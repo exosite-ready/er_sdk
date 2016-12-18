@@ -99,7 +99,7 @@ static void clb_set_ssid(size_t num_of_cap, struct capture *cap)
 
     if (num_of_cap != 0) {
         ASSERT(cap->len+1 <= sizeof(cfg_server.wifi.ssid));
-        snprintf(cfg_server.wifi.ssid, cap->len+1, cap->init);
+        snprintf(cfg_server.wifi.ssid, cap->len+1, "%s", cap->init);
         debug_log(DEBUG_CONFIGURATOR, ("SSID: %s\n", cfg_server.wifi.ssid));
         cfg_server.cfg_changed = TRUE;
     }
@@ -133,7 +133,7 @@ static void clb_set_passpharas(size_t num_of_cap, struct capture *cap)
 
     if (num_of_cap != 0) {
         ASSERT(cap->len+1 <= sizeof(cfg_server.wifi.passpharase));
-        snprintf(cfg_server.wifi.passpharase, cap->len+1, cap->init);
+        snprintf(cfg_server.wifi.passpharase, cap->len+1, "%s", cap->init);
         debug_log(DEBUG_CONFIGURATOR, ("Passphrase: %s\n", cfg_server.wifi.passpharase));
         cfg_server.cfg_changed = TRUE;
     }
@@ -247,7 +247,7 @@ static int32_t set_response(struct client_socket *client, enum page_type page)
     /** 2. Compose the response (HTTP framing + Payload) */
     /*---------------------------------------------------*/
     sprintf(response_header,
-            "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\n",
+            "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nContent-Length: %zu\r\n\r\n",
             string_get_size(response_payload));
 
     status = string_new(&client->response, response_header);
